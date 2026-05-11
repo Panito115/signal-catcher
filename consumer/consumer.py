@@ -103,6 +103,21 @@ def main():
     # Fair dispatch — don't send more than one message to a consumer at a time
     channel.basic_qos(prefetch_count=1)
 
+    # Declare exchanges, queues, and bindings — idempotent, safe to run on every start
+    channel.exchange_declare(exchange='events.impressions', exchange_type='direct', durable=True)
+    channel.exchange_declare(exchange='events.clicks', exchange_type='direct', durable=True)
+    channel.exchange_declare(exchange='events.conversions', exchange_type='direct', durable=True)
+    channel.exchange_declare(exchange='events.dlx', exchange_type='direct', durable=True)
+
+    channel.queue_declare(queue='impressions.queue', durable=True, arguments={'x-dead-letter-exchange': 'events.dlx'})
+    channel.queue_declare(queue='clicks.queue', durable=True, arguments={'x-dead-letter-exchange': 'events.dlx'})
+    channel.queue_declare(queue='conversions.queue', durable=True, arguments={'x-dead-letter-exchange': 'events.dlx'})
+    channel.queue_declare(queue='dlq.queue', durable=True)
+
+    channel.queue_bind(queue='impressions.queue', exchange='events.impressions', routing_key='events.impressions')
+    channel.queue_bind(queue='clicks.queue', exchange='events.clicks', routing_key='events.clicks')
+    channel.queue_bind(queue='conversions.queue', exchange='events.conversions', routing_key='events.conversions')
+
     def on_message(ch, method, properties, body):
         try:
             event = json.loads(body)

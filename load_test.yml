@@ -1,0 +1,81 @@
+config:
+  target: 'http://localhost:8000'
+  phases:
+    - duration: 300      # 5 minutos
+      arrivalRate: 100   # cambiás a 500 o 1000 para otros tiers
+
+scenarios:
+  - weight: 60           # 60% del tráfico son impressions
+    flow:
+      - post:
+          url: '/api/events/impression'
+          json:
+            impression_id: '{{ $randomString() }}'
+            user_ip: '192.168.1.1'
+            user_agent: 'Mozilla/5.0'
+            timestamp: '2026-05-18T14:00:00Z'
+            state: 'CA'
+            search_keywords: 'running shoes'
+            session_id: '{{ $randomString() }}'
+            ads:
+              - advertiser:
+                  advertiser_id: 'adv-001'
+                  advertiser_name: 'Nike'
+                campaign:
+                  campaign_id: 'camp-001'
+                  campaign_name: 'Fall 2026'
+                ad:
+                  ad_id: 'ad-001'
+                  ad_name: 'Air Max'
+                  ad_text: 'Test'
+                  ad_link: 'http://example.com'
+                  ad_position: 1
+                  ad_format: 'banner'
+
+  - weight: 30           # 30% clicks
+    flow:
+      - post:
+          url: '/api/events/click'
+          json:
+            click_id: '{{ $randomString() }}'
+            impression_id: '{{ $randomString() }}'
+            timestamp: '2026-05-18T14:00:05Z'
+            clicked_ad:
+              ad_id: 'ad-001'
+              ad_position: 1
+              click_coordinates:
+                x: 250
+                y: 400
+                normalized_x: 0.65
+                normalized_y: 0.80
+              time_to_click: 5.2
+            user_info:
+              user_ip: '192.168.1.1'
+              state: 'CA'
+              session_id: '{{ $randomString() }}'
+
+  - weight: 10           # 10% conversions
+    flow:
+      - post:
+          url: '/api/events/conversion'
+          json:
+            conversion_id: '{{ $randomString() }}'
+            click_id: '{{ $randomString() }}'
+            impression_id: '{{ $randomString() }}'
+            timestamp: '2026-05-18T14:45:00Z'
+            conversion_type: 'purchase'
+            conversion_value: 59.99
+            conversion_currency: 'USD'
+            conversion_attributes:
+              order_id: '{{ $randomString() }}'
+              items:
+                - product_id: 'prod-001'
+                  quantity: 1
+                  unit_price: 59.99
+            attribution_info:
+              time_to_convert: 900
+              attribution_model: 'last_click'
+            user_info:
+              user_ip: '192.168.1.1'
+              state: 'CA'
+              session_id: '{{ $randomString() }}'

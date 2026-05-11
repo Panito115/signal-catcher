@@ -8,23 +8,23 @@ import pika
 
 class RabbitMQClient:
     def __init__(self):
-        self.host = os.getenv("RABBITMQ_HOST", "rabbitmq")
-        self.port = int(os.getenv("RABBITMQ_PORT", 5672))
-        self.user = os.getenv("RABBITMQ_USER", "guest")
-        self.password = os.getenv("RABBITMQ_PASS", "guest")
+        host = os.getenv("RABBITMQ_HOST", "rabbitmq")
+        port = int(os.getenv("RABBITMQ_PORT", 5672))
+        user = os.getenv("RABBITMQ_USER", "guest")
+        password = os.getenv("RABBITMQ_PASS", "guest")
+        self.parameters = pika.ConnectionParameters(
+            host=host,
+            port=port,
+            credentials=pika.PlainCredentials(user, password),
+            heartbeat=600,
+            blocked_connection_timeout=300,
+        )
         self.connection = None
         self.channel = None
         self._connect()
 
     def _connect(self):
-        credentials = pika.PlainCredentials(self.user, self.password)
-        params = pika.ConnectionParameters(
-            host=self.host,
-            port=self.port,
-            credentials=credentials,
-            heartbeat=600,
-            blocked_connection_timeout=300,
-        )
+        params = self.parameters
         # Retry up to 5 times — RabbitMQ needs a few seconds to start
         for attempt in range(1, 6):
             try:
@@ -69,12 +69,21 @@ class RabbitMQClient:
             self.channel.queue_bind(queue=queue, exchange=exchange, routing_key=routing_key)
 
     def publish(self, exchange: str, message_dict: dict):
-        body = json.dumps(message_dict).encode()
+        try:
+            if self.channel is None or self.channel.is_closed:
+                self.connection = pika.BlockingConnection(self.parameters)
+                self.channel = self.connection.channel()
+                self.declare_exchanges()
+        except Exception:
+            self.connection = pika.BlockingConnection(self.parameters)
+            self.channel = self.connection.channel()
+            self.declare_exchanges()
+
         self.channel.basic_publish(
             exchange=exchange,
-            routing_key="",
-            body=body,
-            properties=pika.BasicProperties(delivery_mode=2),  # persistent
+            routing_key=exchange,
+            body=json.dumps(message_dict),
+            properties=pika.BasicProperties(delivery_mode=2),
         )
 
     def close(self):
