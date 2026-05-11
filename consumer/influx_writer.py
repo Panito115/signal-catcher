@@ -39,7 +39,7 @@ class InfluxWriter:
                 .field("conversion_rate", float(m.get("conversion_rate", 0.0)))
                 .field("avg_time_to_click", float(m.get("avg_time_to_click", 0.0)))
                 .field("avg_time_to_convert", float(m.get("avg_time_to_convert", 0.0)))
-                .time(now, WritePrecision.NANOSECONDS)
+                .time(now, WritePrecision.NS)
             )
             points.append(point)
 

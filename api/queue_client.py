@@ -64,7 +64,7 @@ class RabbitMQClient:
             self.channel.queue_declare(
                 queue=queue,
                 durable=True,
-                arguments={"x-dead-letter-exchange": "events.dlx", "x-dead-letter-routing-key": "dlq"},
+                arguments={"x-dead-letter-exchange": "events.dlx"},
             )
             self.channel.queue_bind(queue=queue, exchange=exchange, routing_key=routing_key)
 
