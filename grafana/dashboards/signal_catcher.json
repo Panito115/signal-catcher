@@ -1,0 +1,164 @@
+{
+  "__inputs": [],
+  "__requires": [],
+  "annotations": { "list": [] },
+  "description": "Signal Catcher — real-time ad tracking dashboard",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "datasource": { "type": "influxdb", "uid": "${DS_INFLUXDB}" },
+      "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "thresholds": { "steps": [{ "color": "green", "value": null }] } }, "overrides": [] },
+      "gridPos": { "h": 4, "w": 4, "x": 0, "y": 0 },
+      "id": 1,
+      "options": { "reduceOptions": { "calcs": ["sum"] }, "orientation": "auto", "textMode": "auto", "colorMode": "background" },
+      "title": "Total Impressions",
+      "type": "stat",
+      "targets": [
+        {
+          "query": "from(bucket: \"signal_catcher\")\n  |> range(start: -30d)\n  |> filter(fn: (r) => r._measurement == \"ad_events\" and r.event_type == \"impression\" and r._field == \"count\")\n  |> sum()",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "datasource": { "type": "influxdb", "uid": "${DS_INFLUXDB}" },
+      "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "thresholds": { "steps": [{ "color": "blue", "value": null }] } }, "overrides": [] },
+      "gridPos": { "h": 4, "w": 4, "x": 4, "y": 0 },
+      "id": 2,
+      "options": { "reduceOptions": { "calcs": ["sum"] }, "orientation": "auto", "textMode": "auto", "colorMode": "background" },
+      "title": "Total Clicks",
+      "type": "stat",
+      "targets": [
+        {
+          "query": "from(bucket: \"signal_catcher\")\n  |> range(start: -30d)\n  |> filter(fn: (r) => r._measurement == \"ad_events\" and r.event_type == \"click\" and r._field == \"count\")\n  |> sum()",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "datasource": { "type": "influxdb", "uid": "${DS_INFLUXDB}" },
+      "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "thresholds": { "steps": [{ "color": "purple", "value": null }] } }, "overrides": [] },
+      "gridPos": { "h": 4, "w": 4, "x": 8, "y": 0 },
+      "id": 3,
+      "options": { "reduceOptions": { "calcs": ["sum"] }, "orientation": "auto", "textMode": "auto", "colorMode": "background" },
+      "title": "Total Conversions",
+      "type": "stat",
+      "targets": [
+        {
+          "query": "from(bucket: \"signal_catcher\")\n  |> range(start: -30d)\n  |> filter(fn: (r) => r._measurement == \"ad_events\" and r.event_type == \"conversion\" and r._field == \"count\")\n  |> sum()",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "datasource": { "type": "influxdb", "uid": "${DS_INFLUXDB}" },
+      "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "max": 100, "min": 0, "thresholds": { "steps": [{ "color": "red", "value": 0 }, { "color": "yellow", "value": 1 }, { "color": "green", "value": 5 }] }, "unit": "percent" }, "overrides": [] },
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 0 },
+      "id": 4,
+      "options": { "reduceOptions": { "calcs": ["mean"] } },
+      "title": "CTR %",
+      "type": "gauge",
+      "targets": [
+        {
+          "query": "from(bucket: \"signal_catcher\")\n  |> range(start: -1h)\n  |> filter(fn: (r) => r._measurement == \"ad_events\" and r._field == \"ctr\")\n  |> mean()",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "datasource": { "type": "influxdb", "uid": "${DS_INFLUXDB}" },
+      "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "max": 100, "min": 0, "thresholds": { "steps": [{ "color": "red", "value": 0 }, { "color": "yellow", "value": 2 }, { "color": "green", "value": 10 }] }, "unit": "percent" }, "overrides": [] },
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 0 },
+      "id": 5,
+      "options": { "reduceOptions": { "calcs": ["mean"] } },
+      "title": "Conversion Rate %",
+      "type": "gauge",
+      "targets": [
+        {
+          "query": "from(bucket: \"signal_catcher\")\n  |> range(start: -1h)\n  |> filter(fn: (r) => r._measurement == \"ad_events\" and r._field == \"conversion_rate\")\n  |> mean()",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "datasource": { "type": "influxdb", "uid": "${DS_INFLUXDB}" },
+      "fieldConfig": { "defaults": {}, "overrides": [] },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 4 },
+      "id": 6,
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } },
+      "title": "Events per Minute",
+      "type": "timeseries",
+      "targets": [
+        {
+          "query": "from(bucket: \"signal_catcher\")\n  |> range(start: -1h)\n  |> filter(fn: (r) => r._measurement == \"ad_events\" and r._field == \"count\" and r.event_type == \"impression\")\n  |> aggregateWindow(every: 1m, fn: sum, createEmpty: false)",
+          "refId": "Impressions"
+        },
+        {
+          "query": "from(bucket: \"signal_catcher\")\n  |> range(start: -1h)\n  |> filter(fn: (r) => r._measurement == \"ad_events\" and r._field == \"count\" and r.event_type == \"click\")\n  |> aggregateWindow(every: 1m, fn: sum, createEmpty: false)",
+          "refId": "Clicks"
+        },
+        {
+          "query": "from(bucket: \"signal_catcher\")\n  |> range(start: -1h)\n  |> filter(fn: (r) => r._measurement == \"ad_events\" and r._field == \"count\" and r.event_type == \"conversion\")\n  |> aggregateWindow(every: 1m, fn: sum, createEmpty: false)",
+          "refId": "Conversions"
+        }
+      ]
+    },
+    {
+      "datasource": { "type": "influxdb", "uid": "${DS_INFLUXDB}" },
+      "fieldConfig": { "defaults": {}, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 12 },
+      "id": 7,
+      "options": { "xField": "state" },
+      "title": "Top 10 States by Impressions",
+      "type": "barchart",
+      "targets": [
+        {
+          "query": "from(bucket: \"signal_catcher\")\n  |> range(start: -1h)\n  |> filter(fn: (r) => r._measurement == \"ad_events\" and r.event_type == \"impression\" and r._field == \"count\")\n  |> group(columns: [\"state\"])\n  |> sum()\n  |> sort(columns: [\"_value\"], desc: true)\n  |> limit(n: 10)",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "datasource": { "type": "influxdb", "uid": "${DS_INFLUXDB}" },
+      "fieldConfig": { "defaults": {}, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 12 },
+      "id": 8,
+      "options": { "xField": "advertiser_id" },
+      "title": "Top 10 Advertisers by Revenue",
+      "type": "barchart",
+      "targets": [
+        {
+          "query": "from(bucket: \"signal_catcher\")\n  |> range(start: -24h)\n  |> filter(fn: (r) => r._measurement == \"ad_events\" and r._field == \"revenue\")\n  |> group(columns: [\"advertiser_id\"])\n  |> sum()\n  |> sort(columns: [\"_value\"], desc: true)\n  |> limit(n: 10)",
+          "refId": "A"
+        }
+      ]
+    }
+  ],
+  "refresh": "10s",
+  "schemaVersion": 38,
+  "tags": ["signal-catcher", "ads"],
+  "templating": {
+    "list": [
+      {
+        "current": {},
+        "hide": 2,
+        "includeAll": false,
+        "name": "DS_INFLUXDB",
+        "options": [],
+        "query": "influxdb",
+        "refresh": 1,
+        "type": "datasource"
+      }
+    ]
+  },
+  "time": { "from": "now-1h", "to": "now" },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "Signal Catcher",
+  "uid": "signal-catcher-main",
+  "version": 1
+}

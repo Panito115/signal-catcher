@@ -1,0 +1,15 @@
+apiVersion: 1
+
+datasources:
+  - name: InfluxDB
+    type: influxdb
+    access: proxy
+    url: http://influxdb:8086
+    isDefault: true
+    jsonData:
+      version: Flux
+      organization: signal_catcher_org
+      defaultBucket: signal_catcher
+      tlsSkipVerify: true
+    secureJsonData:
+      token: signal-catcher-token-2026

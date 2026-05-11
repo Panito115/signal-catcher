@@ -1,0 +1,105 @@
+version: "3.9"
+
+networks:
+  signal-net:
+    driver: bridge
+
+services:
+  api:
+    build: ./api
+    ports:
+      - "${API_PORT:-8000}:8000"
+    env_file: .env
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - signal-net
+    restart: on-failure
+
+  consumer:
+    build:
+      context: .
+      dockerfile: consumer/Dockerfile
+    env_file: .env
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      influxdb:
+        condition: service_healthy
+    networks:
+      - signal-net
+    restart: on-failure
+    deploy:
+      replicas: 3
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    env_file: .env
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-guest}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASS:-guest}
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - signal-net
+
+  influxdb:
+    image: influxdb:2.7
+    ports:
+      - "8086:8086"
+    env_file: .env
+    environment:
+      DOCKER_INFLUXDB_INIT_MODE: setup
+      DOCKER_INFLUXDB_INIT_USERNAME: ${INFLUXDB_USER:-admin}
+      DOCKER_INFLUXDB_INIT_PASSWORD: ${INFLUXDB_PASSWORD:-admin123}
+      DOCKER_INFLUXDB_INIT_ORG: signal_catcher_org
+      DOCKER_INFLUXDB_INIT_BUCKET: signal_catcher
+      DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: signal-catcher-token-2026
+    healthcheck:
+      test: ["CMD", "influx", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - influxdb-data:/var/lib/influxdb2
+    networks:
+      - signal-net
+
+  minio:
+    image: minio/minio
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    env_file: .env
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:-minioadmin123}
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio-data:/data
+    networks:
+      - signal-net
+
+  grafana:
+    image: grafana/grafana:10.2.0
+    ports:
+      - "3000:3000"
+    env_file: .env
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning
+      - ./grafana/dashboards:/var/lib/grafana/dashboards
+    networks:
+      - signal-net
+    depends_on:
+      - influxdb
+
+volumes:
+  influxdb-data:
+  minio-data:
