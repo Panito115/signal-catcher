@@ -76,7 +76,7 @@ Install [Artillery](https://www.artillery.io/) and run:
 
 ```bash
 npm install -g artillery
-artillery run load-test.yml
+artillery run load_test.yml
 ```
 
 ## Project structure
