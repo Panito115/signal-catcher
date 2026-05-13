@@ -1,8 +1,9 @@
 config:
   target: 'http://localhost:8000'
   phases:
-    - duration: 300      # 5 minutos
-      arrivalRate: 1000  # cambiás a 500 o 1000 para otros tiers
+    - duration: 60      # 5 minutos
+      arrivalRate: 2000
+        # cambiás a 500 o 1000 para otros tiers
 
 scenarios:
   - weight: 60           # 60% del tráfico son impressions
