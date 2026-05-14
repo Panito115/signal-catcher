@@ -7,7 +7,6 @@ BATCH_INTERVAL_SECONDS seconds.
 
 import json
 import os
-import sys
 import threading
 import time
 
@@ -19,6 +18,7 @@ from storage_client import StorageClient
 
 BATCH_INTERVAL = int(os.getenv("BATCH_INTERVAL_SECONDS", 5))
 QUEUES = ["impressions.queue", "clicks.queue", "conversions.queue"]
+MAX_RETRIES = 3
 
 
 # ---------------------------------------------------------------------------
@@ -85,11 +85,9 @@ def main():
     influx = InfluxWriter()
     storage = StorageClient()
 
-    # Shared raw-event buffer accessed by both the consumer callback and flush loop
     raw_buffer: list[dict] = []
     raw_lock = threading.Lock()
 
-    # Start flush thread
     flush_thread = threading.Thread(
         target=flush_loop,
         args=(aggregator, influx, storage, raw_buffer, raw_lock),
@@ -100,23 +98,28 @@ def main():
     connection = connect_rabbitmq()
     channel = connection.channel()
 
-    # Fair dispatch — don't send more than one message to a consumer at a time
     channel.basic_qos(prefetch_count=1)
 
-    # Declare exchanges, queues, and bindings — idempotent, safe to run on every start
-    channel.exchange_declare(exchange='events.impressions', exchange_type='direct', durable=True)
-    channel.exchange_declare(exchange='events.clicks', exchange_type='direct', durable=True)
-    channel.exchange_declare(exchange='events.conversions', exchange_type='direct', durable=True)
-    channel.exchange_declare(exchange='events.dlx', exchange_type='direct', durable=True)
+    # Exchanges
+    for exchange in ("events.impressions", "events.clicks", "events.conversions"):
+        channel.exchange_declare(exchange=exchange, exchange_type="direct", durable=True)
+    channel.exchange_declare(exchange="events.dlx", exchange_type="direct", durable=True)
 
-    channel.queue_declare(queue='impressions.queue', durable=True, arguments={'x-dead-letter-exchange': 'events.dlx'})
-    channel.queue_declare(queue='clicks.queue', durable=True, arguments={'x-dead-letter-exchange': 'events.dlx'})
-    channel.queue_declare(queue='conversions.queue', durable=True, arguments={'x-dead-letter-exchange': 'events.dlx'})
-    channel.queue_declare(queue='dlq.queue', durable=True)
+    # Queues — failed messages dead-letter to events.dlx with routing key 'dlq'
+    for queue, exchange in [
+        ("impressions.queue", "events.impressions"),
+        ("clicks.queue", "events.clicks"),
+        ("conversions.queue", "events.conversions"),
+    ]:
+        channel.queue_declare(
+            queue=queue,
+            durable=True,
+            arguments={"x-dead-letter-exchange": "events.dlx"},
+        )
+        channel.queue_bind(queue=queue, exchange=exchange, routing_key=exchange)
 
-    channel.queue_bind(queue='impressions.queue', exchange='events.impressions', routing_key='events.impressions')
-    channel.queue_bind(queue='clicks.queue', exchange='events.clicks', routing_key='events.clicks')
-    channel.queue_bind(queue='conversions.queue', exchange='events.conversions', routing_key='events.conversions')
+    channel.queue_declare(queue="dlq.queue", durable=True)
+    channel.queue_bind(queue="dlq.queue", exchange="events.dlx", routing_key="dlq")
 
     def on_message(ch, method, properties, body):
         try:
@@ -125,10 +128,31 @@ def main():
             with raw_lock:
                 raw_buffer.append(event)
             ch.basic_ack(delivery_tag=method.delivery_tag)
-        except (json.JSONDecodeError, KeyError) as exc:
-            print(f"[Consumer] Bad message, sending to DLQ: {exc}")
-            # nack without requeue → message goes to dead-letter exchange
-            ch.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
+        except Exception as exc:
+            headers = dict(properties.headers or {})
+            retry_count = int(headers.get("x-retry-count", 0))
+
+            if retry_count < MAX_RETRIES:
+                wait = 2 ** retry_count  # 1s, 2s, 4s
+                print(
+                    f"[Consumer] Processing failed (attempt {retry_count + 1}/{MAX_RETRIES}), "
+                    f"retrying in {wait}s: {exc}"
+                )
+                ch.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
+                time.sleep(wait)
+                headers["x-retry-count"] = retry_count + 1
+                ch.basic_publish(
+                    exchange=method.exchange,
+                    routing_key=method.routing_key,
+                    body=body,
+                    properties=pika.BasicProperties(
+                        delivery_mode=2,
+                        headers=headers,
+                    ),
+                )
+            else:
+                print(f"[Consumer] Max retries reached, routing to DLQ: {exc}")
+                ch.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
 
     for queue in QUEUES:
         channel.basic_consume(queue=queue, on_message_callback=on_message)

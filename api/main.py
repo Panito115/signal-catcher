@@ -55,3 +55,15 @@ def ingest_conversion(event: ConversionEvent):
     return JSONResponse(
         {"status": "accepted", "event_id": event.conversion_id}, status_code=202
     )
+
+
+@app.post("/api/test/dlq-trigger", status_code=202)
+def dlq_trigger():
+    """Publishes a malformed message to force consumer failure and exercise the DLQ path."""
+    payload = {
+        "event_type": "impression",
+        "received_at": "2026-05-18T14:00:00Z",
+        "payload": "INVALID_PAYLOAD_TO_TRIGGER_DLQ",
+    }
+    publish("events.impressions", payload)
+    return JSONResponse({"status": "dlq_test_sent"}, status_code=202)
