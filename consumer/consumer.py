@@ -124,6 +124,9 @@ def main():
     def on_message(ch, method, properties, body):
         try:
             event = json.loads(body)
+            payload = event.get('payload', {})
+            if not isinstance(payload, dict):
+                raise ValueError(f"Invalid payload type: {type(payload)}. Expected dict.")
             aggregator.add_event(event)
             with raw_lock:
                 raw_buffer.append(event)
