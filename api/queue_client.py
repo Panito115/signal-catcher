@@ -43,19 +43,35 @@ def _create_connection():
     raise RuntimeError("Could not connect to RabbitMQ after 5 attempts")
 
 def _declare_topology(channel):
-    """Declare exchanges, queues, and bindings."""
-    exchanges = ['events.impressions', 'events.clicks', 'events.conversions']
-    queues = ['impressions.queue', 'clicks.queue', 'conversions.queue']
+    """Declare exchanges, queues, and bindings.
 
+    IMPORTANT: queue arguments declared here MUST be identical to those in
+    consumer/consumer.py. RabbitMQ forbids re-declaring a queue with different
+    arguments (raises PRECONDITION_FAILED), which would crash the consumer.
+    """
+    exchanges = ['events.impressions', 'events.clicks', 'events.conversions']
+    queues    = ['impressions.queue',  'clicks.queue',  'conversions.queue']
+
+    # DLX exchange and DLQ
     channel.exchange_declare(exchange='events.dlx', exchange_type='direct', durable=True)
     channel.queue_declare(queue='dlq.queue', durable=True)
+    # FIX: bind the DLQ so dead-lettered messages actually arrive here.
+    # Without this binding the DLQ queue exists but is never reachable from events.dlx.
+    channel.queue_bind(queue='dlq.queue', exchange='events.dlx', routing_key='dlq')
 
     for exchange, queue in zip(exchanges, queues):
         channel.exchange_declare(exchange=exchange, exchange_type='direct', durable=True)
         channel.queue_declare(
             queue=queue,
             durable=True,
-            arguments={'x-dead-letter-exchange': 'events.dlx'}
+            arguments={
+                'x-dead-letter-exchange': 'events.dlx',
+                # FIX: must match the dlq.queue binding key above.
+                # Without this, RabbitMQ uses the original routing key when
+                # dead-lettering (e.g. "events.impressions"), which does not
+                # match the "dlq" binding — messages are silently dropped.
+                'x-dead-letter-routing-key': 'dlq',
+            }
         )
         channel.queue_bind(queue=queue, exchange=exchange, routing_key=exchange)
 

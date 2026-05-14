@@ -3,6 +3,10 @@ apiVersion: 1
 datasources:
   - name: InfluxDB
     type: influxdb
+    # FIX: explicit uid so the value is stable across container restarts.
+    # Without this Grafana auto-generates a random uid each time, which can
+    # break the ${DS_INFLUXDB} template variable resolution in the dashboard.
+    uid: influxdb
     access: proxy
     url: http://influxdb:8086
     isDefault: true

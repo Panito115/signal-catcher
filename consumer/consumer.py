@@ -100,12 +100,20 @@ def main():
 
     channel.basic_qos(prefetch_count=1)
 
-    # Exchanges
-    for exchange in ("events.impressions", "events.clicks", "events.conversions"):
-        channel.exchange_declare(exchange=exchange, exchange_type="direct", durable=True)
+    # DLX exchange — receives dead-lettered messages
     channel.exchange_declare(exchange="events.dlx", exchange_type="direct", durable=True)
 
-    # Queues — failed messages dead-letter to events.dlx with routing key 'dlq'
+    # DLQ — bound with routing key "dlq" to match x-dead-letter-routing-key below
+    channel.queue_declare(queue="dlq.queue", durable=True)
+    channel.queue_bind(queue="dlq.queue", exchange="events.dlx", routing_key="dlq")
+
+    # Main exchanges and queues
+    # IMPORTANT: x-dead-letter-routing-key MUST match the DLQ binding key ("dlq")
+    # and MUST be identical to what queue_client.py (API side) declares — otherwise
+    # RabbitMQ raises PRECONDITION_FAILED when either service tries to re-declare.
+    for exchange in ("events.impressions", "events.clicks", "events.conversions"):
+        channel.exchange_declare(exchange=exchange, exchange_type="direct", durable=True)
+
     for queue, exchange in [
         ("impressions.queue", "events.impressions"),
         ("clicks.queue", "events.clicks"),
@@ -114,36 +122,42 @@ def main():
         channel.queue_declare(
             queue=queue,
             durable=True,
-            arguments={"x-dead-letter-exchange": "events.dlx"},
+            arguments={
+                "x-dead-letter-exchange": "events.dlx",
+                # FIX: without this key, RabbitMQ uses the original routing key
+                # (e.g. "events.impressions") when dead-lettering, which does NOT
+                # match the DLQ binding — messages vanish instead of reaching dlq.queue.
+                "x-dead-letter-routing-key": "dlq",
+            },
         )
         channel.queue_bind(queue=queue, exchange=exchange, routing_key=exchange)
 
-    channel.queue_declare(queue="dlq.queue", durable=True)
-    channel.queue_bind(queue="dlq.queue", exchange="events.dlx", routing_key="dlq")
-
     def on_message(ch, method, properties, body):
+        # Read retry count BEFORE entering try/except so it's available in both branches
+        headers = dict(properties.headers or {})
+        retry_count = int(headers.get("x-retry-count", 0))
+
         try:
             event = json.loads(body)
-            payload = event.get('payload', {})
+            payload = event.get("payload", {})
             if not isinstance(payload, dict):
                 raise ValueError(f"Invalid payload type: {type(payload)}. Expected dict.")
             aggregator.add_event(event)
             with raw_lock:
                 raw_buffer.append(event)
             ch.basic_ack(delivery_tag=method.delivery_tag)
-        except Exception as exc:
-            headers = dict(properties.headers or {})
-            retry_count = int(headers.get("x-retry-count", 0))
 
+        except Exception as exc:
             if retry_count < MAX_RETRIES:
                 wait = 2 ** retry_count  # 1s, 2s, 4s
                 print(
                     f"[Consumer] Processing failed (attempt {retry_count + 1}/{MAX_RETRIES}), "
                     f"retrying in {wait}s: {exc}"
                 )
-                ch.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
                 time.sleep(wait)
                 headers["x-retry-count"] = retry_count + 1
+
+                # Re-publish the message with updated retry count header
                 ch.basic_publish(
                     exchange=method.exchange,
                     routing_key=method.routing_key,
@@ -153,8 +167,15 @@ def main():
                         headers=headers,
                     ),
                 )
+                # FIX: ACK the original message — we already re-queued it manually above.
+                # Using basic_nack(requeue=False) here would ALSO dead-letter it to DLQ
+                # at the same time, causing the message to arrive at DLQ prematurely
+                # AND be retried — double processing.
+                ch.basic_ack(delivery_tag=method.delivery_tag)
             else:
                 print(f"[Consumer] Max retries reached, routing to DLQ: {exc}")
+                # Only NOW send to DLQ — basic_nack(requeue=False) on a queue with
+                # x-dead-letter-exchange will forward to events.dlx → dlq.queue.
                 ch.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
 
     for queue in QUEUES:
