@@ -9,36 +9,48 @@ const { randomUUID } = require('crypto');
 
 const STATES = ['CA', 'NY', 'TX', 'FL', 'IL', 'WA', 'CO', 'GA', 'OH', 'MI'];
 
+/** Artillery 2 no siempre inicializa `context.vars` antes del primer hook. */
+function ensureVars(context) {
+  if (!context.vars) {
+    context.vars = {};
+  }
+  return context.vars;
+}
+
 function pickState() {
   return STATES[Math.floor(Math.random() * STATES.length)];
 }
 
 function setEventContext(context, events, done) {
-  context.vars.timestamp = new Date().toISOString();
-  context.vars.state = pickState();
+  const v = ensureVars(context);
+  v.timestamp = new Date().toISOString();
+  v.state = pickState();
   done();
 }
 
 function initImpressionClickFunnel(context, events, done) {
-  context.vars.impId = randomUUID();
-  context.vars.clickId = randomUUID();
-  context.vars.funnelState = pickState();
-  context.vars.sessionId = randomUUID();
+  const v = ensureVars(context);
+  v.impId = randomUUID();
+  v.clickId = randomUUID();
+  v.funnelState = pickState();
+  v.sessionId = randomUUID();
   done();
 }
 
 function initFullFunnel(context, events, done) {
-  context.vars.impId = randomUUID();
-  context.vars.clickId = randomUUID();
-  context.vars.convId = randomUUID();
-  context.vars.funnelState = pickState();
-  context.vars.sessionId = randomUUID();
+  const v = ensureVars(context);
+  v.impId = randomUUID();
+  v.clickId = randomUUID();
+  v.convId = randomUUID();
+  v.funnelState = pickState();
+  v.sessionId = randomUUID();
   done();
 }
 
 function funnelTimestamp(context, events, done) {
-  context.vars.timestamp = new Date().toISOString();
-  context.vars.state = context.vars.funnelState;
+  const v = ensureVars(context);
+  v.timestamp = new Date().toISOString();
+  v.state = v.funnelState;
   done();
 }
 
