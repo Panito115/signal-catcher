@@ -1,21 +1,23 @@
 config:
   target: 'http://localhost:8000'
+  processor: './load_test_processor.js'
   phases:
-    - duration: 60      # 5 minutos
+    # Brief: 5 min por tier — subí arrivalRate a 500/1000 según el nivel.
+    - duration: 300
       arrivalRate: 100
-        # cambiás a 500 o 1000 para otros tiers
 
 scenarios:
   - weight: 60           # 60% del tráfico son impressions
     flow:
       - post:
+          beforeRequest: 'setEventContext'
           url: '/api/events/impression'
           json:
             impression_id: '{{ $randomString() }}'
             user_ip: '192.168.1.1'
             user_agent: 'Mozilla/5.0'
-            timestamp: '2026-05-18T14:00:00Z'
-            state: 'CA'
+            timestamp: '{{ timestamp }}'
+            state: '{{ state }}'
             search_keywords: 'running shoes'
             session_id: '{{ $randomString() }}'
             ads:
@@ -36,11 +38,12 @@ scenarios:
   - weight: 30           # 30% clicks
     flow:
       - post:
+          beforeRequest: 'setEventContext'
           url: '/api/events/click'
           json:
             click_id: '{{ $randomString() }}'
             impression_id: '{{ $randomString() }}'
-            timestamp: '2026-05-18T14:00:05Z'
+            timestamp: '{{ timestamp }}'
             clicked_ad:
               ad_id: 'ad-001'
               ad_position: 1
@@ -52,18 +55,19 @@ scenarios:
               time_to_click: 5.2
             user_info:
               user_ip: '192.168.1.1'
-              state: 'CA'
+              state: '{{ state }}'
               session_id: '{{ $randomString() }}'
 
   - weight: 10           # 10% conversions
     flow:
       - post:
+          beforeRequest: 'setEventContext'
           url: '/api/events/conversion'
           json:
             conversion_id: '{{ $randomString() }}'
             click_id: '{{ $randomString() }}'
             impression_id: '{{ $randomString() }}'
-            timestamp: '2026-05-18T14:45:00Z'
+            timestamp: '{{ timestamp }}'
             conversion_type: 'purchase'
             conversion_value: 59.99
             conversion_currency: 'USD'
@@ -78,5 +82,5 @@ scenarios:
               attribution_model: 'last_click'
             user_info:
               user_ip: '192.168.1.1'
-              state: 'CA'
+              state: '{{ state }}'
               session_id: '{{ $randomString() }}'
