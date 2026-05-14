@@ -72,12 +72,14 @@ docker compose up --scale consumer=5 -d
 
 ## Load testing
 
-Install [Artillery](https://www.artillery.io/) and run:
+Artillery está declarado como dependencia de desarrollo (evita instalaciones globales rotas por dependencias AWS/Smithy). Desde la raíz del repo:
 
 ```bash
-npm install -g artillery
-artillery run load_test.yml
+npm install
+npm run load-test
 ```
+
+Si antes usaste `npm install -g artillery` y ves `Cannot find module '@smithy/node-config-provider'` o `run is not a artillery command`, reinstala el global (`npm uninstall -g artillery && npm install -g artillery@2.0.20`) o usa solo el flujo local de arriba.
 
 ## Project structure
 
