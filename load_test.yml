@@ -1,3 +1,14 @@
+# Signal Catcher — Artillery
+#
+# Tres escenarios (pesos 60 / 30 / 10), alineado al brief de mezcla de eventos:
+# 1) Solo impresiones — 1 POST por iteración.
+# 2) Embudo impresión → click — mismos impression_id y session_id; 2 POST por iteración.
+# 3) Embudo impresión → click → conversión — ids encadenados; 3 POST por iteración.
+#
+# Nota: los escenarios 2 y 3 emiten más peticiones HTTP por iteración que el modelo
+# “un solo POST por escenario”; si medís RPS en el API, el total de requests sube
+# respecto al mismo arrivalRate con solo requests sueltos.
+
 config:
   target: 'http://localhost:8000'
   processor: './load_test_processor.js'
@@ -7,7 +18,8 @@ config:
       arrivalRate: 100
 
 scenarios:
-  - weight: 60           # 60% del tráfico son impressions
+  - name: 'Solo impresiones'
+    weight: 60
     flow:
       - post:
           beforeRequest: 'setEventContext'
@@ -35,14 +47,41 @@ scenarios:
                   ad_position: 1
                   ad_format: 'banner'
 
-  - weight: 30           # 30% clicks
+  - name: 'Embudo impresión → click'
+    weight: 30
     flow:
+      - function: 'initImpressionClickFunnel'
       - post:
-          beforeRequest: 'setEventContext'
+          beforeRequest: 'funnelTimestamp'
+          url: '/api/events/impression'
+          json:
+            impression_id: '{{ impId }}'
+            user_ip: '192.168.1.1'
+            user_agent: 'Mozilla/5.0'
+            timestamp: '{{ timestamp }}'
+            state: '{{ state }}'
+            search_keywords: 'running shoes'
+            session_id: '{{ sessionId }}'
+            ads:
+              - advertiser:
+                  advertiser_id: 'adv-001'
+                  advertiser_name: 'Nike'
+                campaign:
+                  campaign_id: 'camp-001'
+                  campaign_name: 'Fall 2026'
+                ad:
+                  ad_id: 'ad-001'
+                  ad_name: 'Air Max'
+                  ad_text: 'Test'
+                  ad_link: 'http://example.com'
+                  ad_position: 1
+                  ad_format: 'banner'
+      - post:
+          beforeRequest: 'funnelTimestamp'
           url: '/api/events/click'
           json:
-            click_id: '{{ $randomString() }}'
-            impression_id: '{{ $randomString() }}'
+            click_id: '{{ clickId }}'
+            impression_id: '{{ impId }}'
             timestamp: '{{ timestamp }}'
             clicked_ad:
               ad_id: 'ad-001'
@@ -56,17 +95,64 @@ scenarios:
             user_info:
               user_ip: '192.168.1.1'
               state: '{{ state }}'
-              session_id: '{{ $randomString() }}'
+              session_id: '{{ sessionId }}'
 
-  - weight: 10           # 10% conversions
+  - name: 'Embudo impresión → click → conversión'
+    weight: 10
     flow:
+      - function: 'initFullFunnel'
       - post:
-          beforeRequest: 'setEventContext'
+          beforeRequest: 'funnelTimestamp'
+          url: '/api/events/impression'
+          json:
+            impression_id: '{{ impId }}'
+            user_ip: '192.168.1.1'
+            user_agent: 'Mozilla/5.0'
+            timestamp: '{{ timestamp }}'
+            state: '{{ state }}'
+            search_keywords: 'running shoes'
+            session_id: '{{ sessionId }}'
+            ads:
+              - advertiser:
+                  advertiser_id: 'adv-001'
+                  advertiser_name: 'Nike'
+                campaign:
+                  campaign_id: 'camp-001'
+                  campaign_name: 'Fall 2026'
+                ad:
+                  ad_id: 'ad-001'
+                  ad_name: 'Air Max'
+                  ad_text: 'Test'
+                  ad_link: 'http://example.com'
+                  ad_position: 1
+                  ad_format: 'banner'
+      - post:
+          beforeRequest: 'funnelTimestamp'
+          url: '/api/events/click'
+          json:
+            click_id: '{{ clickId }}'
+            impression_id: '{{ impId }}'
+            timestamp: '{{ timestamp }}'
+            clicked_ad:
+              ad_id: 'ad-001'
+              ad_position: 1
+              click_coordinates:
+                x: 250
+                y: 400
+                normalized_x: 0.65
+                normalized_y: 0.80
+              time_to_click: 5.2
+            user_info:
+              user_ip: '192.168.1.1'
+              state: '{{ state }}'
+              session_id: '{{ sessionId }}'
+      - post:
+          beforeRequest: 'funnelTimestamp'
           url: '/api/events/conversion'
           json:
-            conversion_id: '{{ $randomString() }}'
-            click_id: '{{ $randomString() }}'
-            impression_id: '{{ $randomString() }}'
+            conversion_id: '{{ convId }}'
+            click_id: '{{ clickId }}'
+            impression_id: '{{ impId }}'
             timestamp: '{{ timestamp }}'
             conversion_type: 'purchase'
             conversion_value: 59.99
@@ -83,4 +169,4 @@ scenarios:
             user_info:
               user_ip: '192.168.1.1'
               state: '{{ state }}'
-              session_id: '{{ $randomString() }}'
+              session_id: '{{ sessionId }}'
