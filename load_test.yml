@@ -13,9 +13,9 @@ config:
   target: 'http://localhost:8000'
   processor: './load_test_processor.js'
   phases:
-    # Brief: 5 min por tier — subí arrivalRate a 500/1000 según el nivel.
-    - duration: 300
+    - duration: 60      # 5 minutos
       arrivalRate: 100
+        # cambiás a 500 o 1000 para otros tiers
 
 scenarios:
   - name: 'Solo impresiones'
