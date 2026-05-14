@@ -1,0 +1,14 @@
+{
+  "name": "signal-catcher",
+  "private": true,
+  "description": "Load test tooling (Artillery) — use npm run load-test",
+  "scripts": {
+    "load-test": "artillery run load_test.yml"
+  },
+  "devDependencies": {
+    "artillery": "2.0.20"
+  },
+  "overrides": {
+    "@smithy/node-config-provider": "^4.3.14"
+  }
+}
